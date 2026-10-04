@@ -79,13 +79,14 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { PERMIT_FIELDS, STATUS_CLOSED, STATUS_DRAFT, STATUS_GRANTED, STATUS_VOID, VERDICT_OVERDUE } from '@/data/workpermit'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('workpermit')
-const columns = ["工作票号", "工作任务", "所属变电站", "停电范围", "工作负责人", "许可时间", "终结时间", "许可状态"]
+// 列定义即导出口径：许可时限、到期判定由统一时限计算填，列表/统计/导出看到的完全一致。
+const columns = PERMIT_FIELDS
 const actions = ["签发许可", "办理终结", "作废工作票"]
-const statuses = ["待签发", "已许可", "已终结", "已作废"]
-const stats = [{"label": "待签发工作票", "value": 0}, {"label": "已许可工作票", "value": 0}, {"label": "已终结工作票", "value": 0}]
+const statuses = [STATUS_DRAFT, STATUS_GRANTED, STATUS_CLOSED, STATUS_VOID]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -98,6 +99,17 @@ const statusSummary = computed(() =>
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+// 到期统计与列表同源：工作负责人在列表里读到的许可时间，和这里统计用的是同一份。
+const stats = computed(() => [
+  { label: "待签发工作票", value: countByStatus(STATUS_DRAFT) },
+  { label: "已许可工作票", value: countByStatus(STATUS_GRANTED) },
+  { label: "已终结工作票", value: countByStatus(STATUS_CLOSED) },
+  { label: "超期未终结工作票", value: rows.value.filter((row) => String(row['到期判定']) === VERDICT_OVERDUE).length },
+])
+
+function countByStatus(status: string): number {
+  return rows.value.filter((row) => String(row.status) === status).length
+}
 
 function resetFilters() {
   filters.value = {}

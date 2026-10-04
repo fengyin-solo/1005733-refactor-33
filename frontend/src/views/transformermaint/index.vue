@@ -46,8 +46,12 @@
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
+            <template v-if="isDriven(row)">
+              <span class="link is-disabled">待开工（工作票超期驱动）</span>
+            </template>
             <button
               v-for="action in actions"
+              v-else
               :key="action"
               class="link"
               type="button"
@@ -85,7 +89,6 @@ const meta = moduleMeta('transformermaint')
 const columns = ["检修编号", "主变名称", "检修类别", "停电范围", "检修班组", "计划工期", "完成日期", "检修状态"]
 const actions = ["提交开工", "确认完工", "申请延期"]
 const statuses = ["待开工", "检修中", "已完工", "已延期"]
-const stats = [{"label": "待开工检修", "value": 0}, {"label": "检修中主变", "value": 0}, {"label": "本月完工数", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -98,6 +101,16 @@ const statusSummary = computed(() =>
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+// 待开工数与清单同源：超出期限未终结的工作票会实时并入待开工清单。
+const stats = computed(() => [
+  { label: "待开工检修", value: rows.value.filter((row) => String(row.status) === "待开工").length },
+  { label: "检修中主变", value: rows.value.filter((row) => String(row.status) === "检修中").length },
+  { label: "本月完工数", value: rows.value.filter((row) => String(row.status) === "已完工").length },
+])
+
+function isDriven(row: EntryRow): boolean {
+  return Number(row.id) > 900000
+}
 
 function resetFilters() {
   filters.value = {}
