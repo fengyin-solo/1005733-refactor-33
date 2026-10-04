@@ -12,9 +12,9 @@
     </header>
 
     <div class="stat-row">
-      <article v-for="item in stats" :key="item.label" class="stat-card">
+      <article v-for="item in statCards" :key="item.label" class="stat-card">
         <span class="stat-label">{{ item.label }}</span>
-        <strong class="stat-value">{{ item.value }}</strong>
+        <strong class="stat-value" :class="{ danger: item.danger }">{{ item.value }}</strong>
       </article>
     </div>
 
@@ -42,8 +42,8 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in rows" :key="String(row.id)">
-          <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+        <tr v-for="row in rows" :key="String(row.id)" :class="{ 'row-overdue': isOverdue(row) }">
+          <td v-for="column in columns" :key="column">{{ row[column] || '—' }}</td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
@@ -65,6 +65,7 @@
 
     <footer class="page-foot">
       <span>共 {{ total }} 条工作票许可记录</span>
+      <span>许可时限统一按许可时间起算 {{ permitValidHours }} 小时；已终结历史票沿用当时口径</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -78,26 +79,55 @@ import {
   listEntries,
   moduleMeta,
   runAction as applyAction,
+  workPermitStats,
 } from '@/api/local-service'
+import { PERMIT_VALID_HOURS } from '@/data/work-permit'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('workpermit')
-const columns = ["工作票号", "工作任务", "所属变电站", "停电范围", "工作负责人", "许可时间", "终结时间", "许可状态"]
-const actions = ["签发许可", "办理终结", "作废工作票"]
-const statuses = ["待签发", "已许可", "已终结", "已作废"]
-const stats = [{"label": "待签发工作票", "value": 0}, {"label": "已许可工作票", "value": 0}, {"label": "已终结工作票", "value": 0}]
+// 许可时限、到期状态由统一口径在取数时补入，列表、统计、导出读到的是同一套值。
+const columns = [
+  '工作票号',
+  '工作任务',
+  '所属变电站',
+  '停电范围',
+  '工作负责人',
+  '许可时间',
+  '许可时限',
+  '终结时间',
+  '到期状态',
+  '许可状态',
+]
+const actions = ['签发许可', '办理终结', '作废工作票']
+const statuses = ['待签发', '已许可', '已终结', '已作废']
+const permitValidHours = PERMIT_VALID_HOURS
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+
+const statCards = computed(() => {
+  const summary = workPermitStats()
+  return [
+    { label: '待签发工作票', value: summary.draft, danger: false },
+    { label: '已许可工作票', value: summary.permitted, danger: false },
+    { label: '已终结工作票', value: summary.finished, danger: false },
+    { label: '超期未终结工作票', value: summary.overdueOpen, danger: summary.overdueOpen > 0 },
+  ]
+})
+
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+
+function isOverdue(row: EntryRow): boolean {
+  return String(row['到期状态'] ?? '').startsWith('超期')
+}
 
 function resetFilters() {
   filters.value = {}
@@ -135,3 +165,13 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.row-overdue {
+  background-color: rgba(224, 76, 76, 0.08);
+}
+
+.stat-value.danger {
+  color: #e04c4c;
+}
+</style>

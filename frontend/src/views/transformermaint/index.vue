@@ -63,6 +63,28 @@
       </tbody>
     </table>
 
+    <section class="driven-panel">
+      <h3>待开工清单（由超期未终结工作票驱动）</h3>
+      <p class="panel-hint">
+        许可时限与工作票页同一口径：许可时间起算 {{ permitValidHours }} 小时，超期且未终结即进清单。
+      </p>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th v-for="column in drivenColumns" :key="column">{{ column }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in drivenRows" :key="`permit-${String(row.id)}`">
+            <td v-for="column in drivenColumns" :key="column">{{ row[column] || '—' }}</td>
+          </tr>
+          <tr v-if="!drivenRows.length">
+            <td :colspan="drivenColumns.length" class="empty-state">暂无超期未终结的工作票</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条主变检修记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -77,8 +99,10 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  pendingStartDrivenPermits,
   runAction as applyAction,
 } from '@/api/local-service'
+import { PERMIT_VALID_HOURS } from '@/data/work-permit'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('transformermaint')
@@ -86,8 +110,12 @@ const columns = ["检修编号", "主变名称", "检修类别", "停电范围",
 const actions = ["提交开工", "确认完工", "申请延期"]
 const statuses = ["待开工", "检修中", "已完工", "已延期"]
 const stats = [{"label": "待开工检修", "value": 0}, {"label": "检修中主变", "value": 0}, {"label": "本月完工数", "value": 0}]
+// 待开工清单只展示统一口径补出的字段，工作负责人在这里与到期统计读到同一套许可时间。
+const drivenColumns = ['工作票号', '工作任务', '所属变电站', '停电范围', '工作负责人', '许可时间', '许可时限', '到期状态']
+const permitValidHours = PERMIT_VALID_HOURS
 
 const rows = ref<EntryRow[]>([])
+const drivenRows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
@@ -128,6 +156,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    drivenRows.value = pendingStartDrivenPermits()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '主变检修列表读取失败'
   }
@@ -135,3 +164,24 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.driven-panel {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid rgba(224, 76, 76, 0.35);
+  border-radius: 8px;
+  background-color: rgba(224, 76, 76, 0.04);
+}
+
+.driven-panel h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.panel-hint {
+  margin: 0 0 12px;
+  color: #777;
+  font-size: 12px;
+}
+</style>
